@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Diwali AR — Diyas On Floor (Instant)</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://unpkg.com/aframe-particle-system-component@1.1.3/dist/aframe-particle-system-component.min.js"></script>
+  <style>
+    body { margin:0; overflow:hidden; background:#000; color:#fff; font-family:system-ui,sans-serif; }
+    #hud { position:fixed; top:12px; left:50%; transform:translateX(-50%);
+           background:rgba(0,0,0,.55); padding:8px 12px; border-radius:12px; font-size:14px; display:flex; gap:8px; align-items:center; }
+    .chip { background:#1f2937; border-radius:10px; padding:6px 10px; }
+    button { cursor:pointer; border:0; border-radius:10px; padding:6px 10px; background:#1f2937; color:#fff; }
+    #hint { position:fixed; bottom:12px; left:50%; transform:translateX(-50%);
+            background:rgba(0,0,0,.45); padding:8px 12px; border-radius:12px; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div id="hud">
+    <span>Find all <span id="total">6</span> diyas · Found: <span id="found">0</span></span>
+    <span class="chip" id="status">Loading…</span>
+    <button id="reset">Reset</button>
+  </div>
+  <div id="hint">Tap each diya to collect it. 🎆</div>
+
+  <a-scene id="scene" renderer="antialias:true" embedded>
+    <a-entity id="camera" camera look-controls position="0 1.6 0"></a-entity>
+    <a-entity id="diya-layer"></a-entity>
+    <a-entity id="fireworks" visible="false"></a-entity>
+  </a-scene>
+
+  <script>
+    const DIYA_COUNT = 6;
+    const state = { placed:false, found:0 };
+
+    const sceneEl   = document.getElementById('scene');
+    const diyaLayer = document.getElementById('diya-layer');
+    const statusEl  = document.getElementById('status');
+    const hintEl    = document.getElementById('hint');
+    document.getElementById('total').textContent = DIYA_COUNT;
+
+    function setStatus(msg){ statusEl.textContent = msg; }
+    function updateFound(){ document.getElementById('found').textContent = state.found; }
+
+    function makeDiya(){
+      const root = document.createElement('a-entity');
+      root.setAttribute('class','diya');
+      const base = document.createElement('a-entity');
+      base.setAttribute('geometry','primitive: cylinder; radius: 0.09; height: 0.04');
+      base.setAttribute('material','color: #8B4513'); base.setAttribute('position','0 0.02 0');
+      const flame = document.createElement('a-entity');
+      flame.setAttribute('geometry','primitive: cone; radiusBottom: 0.02; height: 0.06');
+      flame.setAttribute('material','color: #ffcc33; emissive: #ff9900; emissiveIntensity: 0.9');
+      flame.setAttribute('position','0 0.075 0');
+      const glow = document.createElement('a-entity');
+      glow.setAttribute('light','type: point; color: #ffbb66; intensity: 0.9; distance: 1.8');
+      glow.setAttribute('position','0 0.075 0');
+
+      root.appendChild(base); root.appendChild(flame); root.appendChild(glow);
+      root.addEventListener('click', () => {
+        if (root.getAttribute('collected')) return;
+        root.setAttribute('collected','true');
+        root.setAttribute('visible','false');
+        state.found += 1; updateFound();
+        if (state.found >= DIYA_COUNT) launchFireworks();
+      });
+      return root;
+    }
+
+    function launchFireworks(){
+      const fw = document.getElementById('fireworks');
+      fw.setAttribute('visible','true'); fw.innerHTML = '';
+      for (let i=0;i<8;i++){
+        const b = document.createElement('a-entity');
+        b.setAttribute('particle-system','preset: default; type: sphere; particleCount: 120; lifespan: 2; velocityValue: 3');
+        b.setAttribute('position', `${Math.random()*2-1} ${3+Math.random()*2} ${-1-Math.random()*2}`);
+        fw.appendChild(b);
+      }
+      hintEl.textContent = 'You found them all! Enjoy the fireworks! 🎇';
+      setStatus('Complete!');
+    }
+
+    function placeDiyasNow(){
+      if (state.placed) return;
+      const T = window.THREE || (window.AFRAME && AFRAME.THREE);
+      if (!T) { setStatus('THREE not ready'); return; }
+      state.placed = true; state.found = 0; updateFound(); diyaLayer.innerHTML = '';
+
+      const cam = document.getElementById('camera');
+      const camPos = cam.object3D.getWorldPosition(new T.Vector3());
+      const forward = new T.Vector3(0,0,-1).applyQuaternion(cam.object3D.quaternion);
+      const center = camPos.clone().add(forward.multiplyScalar(2)); // ~2m in front
+      const floorY = 0.01; // simple world-floor approximation
+
+      const radius = 0.8;
+      for (let i=0;i<DIYA_COUNT;i++){
+        const angle = (i / DIYA_COUNT) * Math.PI * 2 + (Math.random()*0.4);
+        const x = center.x + Math.cos(angle) * (radius + Math.random()*0.3);
+        const z = center.z + Math.sin(angle) * (radius + Math.random()*0.3);
+        const y = floorY;
+        const diya = makeDiya();
+        diya.setAttribute('position', `${x} ${y} ${z}`);
+        diya.setAttribute('rotation', `0 ${Math.random()*360} 0`);
+        diyaLayer.appendChild(diya);
+      }
+      hintEl.textContent = 'Tap each diya to collect it!';
+      setStatus('Diyas placed');
+    }
+
+    document.getElementById('reset').addEventListener('click', () => {
+      state.placed = false; state.found = 0; updateFound(); diyaLayer.innerHTML = '';
+      hintEl.textContent = 'Tap each diya to collect it. 🎆';
+      placeDiyasNow();
+    });
+
+    sceneEl.addEventListener('loaded', () => {
+      // Place immediately so visitors always see diyas
+      setTimeout(placeDiyasNow, 150);
+    });
+  </script>
+</body>
+</html>
